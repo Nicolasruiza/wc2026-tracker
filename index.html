@@ -517,7 +517,9 @@
         });
       }catch(e){
         if(cached) return { data: cached.data, fromCache: true };
-        throw new Error('NETWORK');
+        const err = new Error('NETWORK');
+        err.detail = e.message;
+        throw err;
       }
 
       Storage.incrRateLimit();
@@ -527,14 +529,20 @@
           if(cached) return { data: cached.data, fromCache: true, rateLimited: true };
           throw new Error('RATE_LIMIT');
         }
+        let bodyText = '';
+        try{ bodyText = await res.text(); }catch(e){}
         if(cached) return { data: cached.data, fromCache: true };
-        throw new Error('HTTP_' + res.status);
+        const err = new Error('HTTP_' + res.status);
+        err.detail = bodyText.slice(0, 300);
+        throw err;
       }
 
       const json = await res.json();
-      if(json.errors && Object.keys(json.errors).length){
+      if(json.errors && (Array.isArray(json.errors) ? json.errors.length : Object.keys(json.errors).length)){
         if(cached) return { data: cached.data, fromCache: true };
-        throw new Error('API_ERROR');
+        const err = new Error('API_ERROR');
+        err.detail = JSON.stringify(json.errors);
+        throw err;
       }
 
       const data = json.response;
@@ -630,10 +638,11 @@
       showBanner('warn', 'Daily API limit reached. Showing cached data where available.');
       return;
     }
+    const detail = err.detail ? ` (${err.detail})` : ` (${msg})`;
     if(hasData || state.standings || state.fixtures){
-      showBanner('error', 'Could not refresh data — using cached data.', { retry:true });
+      showBanner('error', 'Could not refresh data — using cached data.' + detail, { retry:true });
     } else {
-      showBanner('error', 'Could not load data. Check your API key and connection.', { retry:true });
+      showBanner('error', 'Could not load data.' + detail, { retry:true });
     }
   }
 
