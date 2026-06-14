@@ -523,9 +523,10 @@
           headers: { 'x-apisports-key': apiKey }
         });
       }catch(e){
+        console.error('Fetch to api-football failed:', e, 'url=', url.toString(), 'online=', navigator.onLine);
         if(cached) return { data: cached.data, fromCache: true };
         const err = new Error('NETWORK');
-        err.detail = e.message;
+        err.detail = `${e.name}: ${e.message} — online=${navigator.onLine}. Check the browser console for details (often caused by an ad/content blocker on api-sports.io).`;
         throw err;
       }
 
