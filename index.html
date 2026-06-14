@@ -507,6 +507,13 @@
         throw new Error('NO_KEY');
       }
 
+      if(location.protocol === 'file:'){
+        if(cached) return { data: cached.data, fromCache: true };
+        const err = new Error('FILE_PROTOCOL');
+        err.detail = 'This page is open as a local file:// — browsers block API requests from local files. Open the GitHub Pages URL instead.';
+        throw err;
+      }
+
       const url = new URL(CONFIG.apiBase + endpoint);
       Object.keys(params || {}).forEach(k => url.searchParams.set(k, params[k]));
 
@@ -516,18 +523,10 @@
           headers: { 'x-apisports-key': apiKey }
         });
       }catch(e){
-        // Direct browser calls to api-football are often blocked by CORS.
-        // Fall back to a public CORS proxy.
-        try{
-          res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(url.toString()), {
-            headers: { 'x-apisports-key': apiKey }
-          });
-        }catch(e2){
-          if(cached) return { data: cached.data, fromCache: true };
-          const err = new Error('NETWORK');
-          err.detail = e2.message;
-          throw err;
-        }
+        if(cached) return { data: cached.data, fromCache: true };
+        const err = new Error('NETWORK');
+        err.detail = e.message;
+        throw err;
       }
 
       Storage.incrRateLimit();
@@ -644,6 +643,10 @@
     }
     if(msg === 'RATE_LIMIT'){
       showBanner('warn', 'Daily API limit reached. Showing cached data where available.');
+      return;
+    }
+    if(msg === 'FILE_PROTOCOL'){
+      showBanner('error', err.detail);
       return;
     }
     const detail = err.detail ? ` (${err.detail})` : ` (${msg})`;
