@@ -380,6 +380,12 @@
       3. Paste it below.
     </p>
     <input type="text" id="apiKeyInput" placeholder="Paste your API key here">
+    <p style="font-size:11px; margin-top:14px;">
+      Browser CORS issue? If direct calls fail, deploy a tiny free
+      <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Worker</a>
+      proxy and enter its URL below instead.
+    </p>
+    <input type="text" id="proxyUrlInput" placeholder="(Optional) Proxy URL e.g. https://your-worker.workers.dev">
     <button class="primary-btn" id="saveKeyBtn">Save &amp; Continue</button>
     <button class="skip-btn" id="skipKeyBtn">Continue without a key</button>
   </div>
@@ -445,6 +451,8 @@
   const Storage = {
     getApiKey(){ return localStorage.getItem('wc2026_api_key') || ''; },
     setApiKey(k){ localStorage.setItem('wc2026_api_key', k.trim()); },
+    getProxyUrl(){ return localStorage.getItem('wc2026_proxy_url') || ''; },
+    setProxyUrl(u){ localStorage.setItem('wc2026_proxy_url', u.trim()); },
     getCache(key){
       try{
         const raw = localStorage.getItem('wc2026_cache_' + key);
@@ -503,8 +511,9 @@
         throw new Error('RATE_LIMIT');
       }
 
+      const proxyUrl = Storage.getProxyUrl();
       const apiKey = Storage.getApiKey();
-      if(!apiKey){
+      if(!apiKey && !proxyUrl){
         if(cached) return { data: cached.data, fromCache: true };
         throw new Error('NO_KEY');
       }
@@ -516,16 +525,24 @@
         throw err;
       }
 
-      const url = new URL(CONFIG.apiBase + endpoint);
-      Object.keys(params || {}).forEach(k => url.searchParams.set(k, params[k]));
+      let url, fetchOpts;
+      if(proxyUrl){
+        // Proxy mode: a small server-side proxy injects the API key itself,
+        // so the browser sends a plain GET with no custom headers (no CORS preflight).
+        url = new URL(proxyUrl.replace(/\/$/, '') + endpoint);
+        Object.keys(params || {}).forEach(k => url.searchParams.set(k, params[k]));
+        fetchOpts = {};
+      } else {
+        url = new URL(CONFIG.apiBase + endpoint);
+        Object.keys(params || {}).forEach(k => url.searchParams.set(k, params[k]));
+        fetchOpts = { headers: { 'x-apisports-key': apiKey } };
+      }
 
       let res;
       try{
-        res = await fetch(url.toString(), {
-          headers: { 'x-apisports-key': apiKey }
-        });
+        res = await fetch(url.toString(), fetchOpts);
       }catch(e){
-        console.error('Fetch to api-football failed:', e, 'url=', url.toString(), 'online=', navigator.onLine);
+        console.error('Fetch failed:', e, 'url=', url.toString(), 'online=', navigator.onLine);
         if(cached) return { data: cached.data, fromCache: true };
 
         // Sanity check: can we reach a different cross-origin host at all?
@@ -538,7 +555,7 @@
         }
 
         const err = new Error('NETWORK');
-        err.detail = `${e.name}: ${e.message} — url=${url.toString()} keyLen=${apiKey.length} — sanity-check-to-github=${sanity}`;
+        err.detail = `${e.name}: ${e.message} — url=${url.toString()} — sanity-check-to-github=${sanity}`;
         throw err;
       }
 
@@ -1111,9 +1128,8 @@ Give me a ranked list of top 8 contenders to win the World Cup with % probabilit
 
   /* ================= SETUP SCREEN ================= */
   function initSetupScreen(){
-    const key = Storage.getApiKey();
     const screen = document.getElementById('setupScreen');
-    if(key){
+    if(Storage.getApiKey() || Storage.getProxyUrl()){
       screen.style.display = 'none';
     } else {
       screen.style.display = 'flex';
@@ -1122,12 +1138,15 @@ Give me a ranked list of top 8 contenders to win the World Cup with % probabilit
 
   document.getElementById('settingsBtn').addEventListener('click', () => {
     document.getElementById('apiKeyInput').value = Storage.getApiKey();
+    document.getElementById('proxyUrlInput').value = Storage.getProxyUrl();
     document.getElementById('setupScreen').style.display = 'flex';
   });
 
   document.getElementById('saveKeyBtn').addEventListener('click', () => {
     const val = document.getElementById('apiKeyInput').value.trim();
-    if(!val) return;
+    const proxyVal = document.getElementById('proxyUrlInput').value.trim();
+    Storage.setProxyUrl(proxyVal);
+    if(!val && !proxyVal) return;
     Storage.setApiKey(val);
     document.getElementById('setupScreen').style.display = 'none';
     loadAll(false);
@@ -1159,7 +1178,7 @@ Give me a ranked list of top 8 contenders to win the World Cup with % probabilit
     if(cf) state.fixtures = cf.data;
   })();
   renderAll();
-  if(Storage.getApiKey()){
+  if(Storage.getApiKey() || Storage.getProxyUrl()){
     loadAll(false);
   }
 
