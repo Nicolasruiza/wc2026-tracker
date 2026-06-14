@@ -516,10 +516,18 @@
           headers: { 'x-apisports-key': apiKey }
         });
       }catch(e){
-        if(cached) return { data: cached.data, fromCache: true };
-        const err = new Error('NETWORK');
-        err.detail = e.message;
-        throw err;
+        // Direct browser calls to api-football are often blocked by CORS.
+        // Fall back to a public CORS proxy.
+        try{
+          res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(url.toString()), {
+            headers: { 'x-apisports-key': apiKey }
+          });
+        }catch(e2){
+          if(cached) return { data: cached.data, fromCache: true };
+          const err = new Error('NETWORK');
+          err.detail = e2.message;
+          throw err;
+        }
       }
 
       Storage.incrRateLimit();
