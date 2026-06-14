@@ -52,12 +52,13 @@
   .brand-text{font-size:18px; line-height:1; color:var(--text);}
   .brand-text .yr{color:var(--gold);}
   .header-right{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-secondary); text-align:right;}
-  #refreshBtn{
+  #refreshBtn, #settingsBtn{
     background:var(--red); border:none; color:#fff; border-radius:6px;
     width:32px; height:32px; font-size:16px; cursor:pointer; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     transition:transform .2s;
   }
+  #settingsBtn{background:rgba(255,255,255,0.1);}
   #refreshBtn:active{transform:rotate(180deg);}
   #refreshBtn.spinning{animation:spin 0.8s linear infinite;}
   @keyframes spin{ to{ transform:rotate(360deg); } }
@@ -300,6 +301,7 @@
   </div>
   <div class="header-right">
     <span id="lastUpdated">Not loaded</span>
+    <button id="settingsBtn" title="API key settings">⚙</button>
     <button id="refreshBtn" title="Refresh data">↻</button>
   </div>
 </header>
@@ -442,7 +444,7 @@
   /* ================= STORAGE ================= */
   const Storage = {
     getApiKey(){ return localStorage.getItem('wc2026_api_key') || ''; },
-    setApiKey(k){ localStorage.setItem('wc2026_api_key', k); },
+    setApiKey(k){ localStorage.setItem('wc2026_api_key', k.trim()); },
     getCache(key){
       try{
         const raw = localStorage.getItem('wc2026_cache_' + key);
@@ -1117,6 +1119,11 @@ Give me a ranked list of top 8 contenders to win the World Cup with % probabilit
       screen.style.display = 'flex';
     }
   }
+
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    document.getElementById('apiKeyInput').value = Storage.getApiKey();
+    document.getElementById('setupScreen').style.display = 'flex';
+  });
 
   document.getElementById('saveKeyBtn').addEventListener('click', () => {
     const val = document.getElementById('apiKeyInput').value.trim();
