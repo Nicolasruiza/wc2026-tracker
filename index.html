@@ -52,13 +52,12 @@
   .brand-text{font-size:18px; line-height:1; color:var(--text);}
   .brand-text .yr{color:var(--gold);}
   .header-right{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-secondary); text-align:right;}
-  #refreshBtn, #settingsBtn{
+  #refreshBtn{
     background:var(--red); border:none; color:#fff; border-radius:6px;
     width:32px; height:32px; font-size:16px; cursor:pointer; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     transition:transform .2s;
   }
-  #settingsBtn{background:rgba(255,255,255,0.1);}
   #refreshBtn:active{transform:rotate(180deg);}
   #refreshBtn.spinning{animation:spin 0.8s linear infinite;}
   @keyframes spin{ to{ transform:rotate(360deg); } }
@@ -96,33 +95,6 @@
   .banner button{
     background:var(--navy); border:none; color:#fff; padding:5px 10px; border-radius:6px;
     font-size:12px; cursor:pointer; flex-shrink:0;
-  }
-
-  /* ===== SETUP SCREEN ===== */
-  #setupScreen{
-    position:fixed; inset:0; background:var(--bg); z-index:200;
-    display:flex; align-items:center; justify-content:center; padding:24px;
-  }
-  .setup-card{
-    background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:14px;
-    padding:24px; max-width:420px; width:100%; text-align:center;
-  }
-  .setup-card .trophy{font-size:48px; display:block; margin-bottom:8px;}
-  .setup-card h1{font-size:28px; margin:0 0 4px;}
-  .setup-card p{color:var(--text-secondary); font-size:14px; line-height:1.5;}
-  .setup-card a{color:var(--gold);}
-  .setup-card input{
-    width:100%; padding:12px; margin-top:14px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);
-    background:var(--surface2); color:#fff; font-size:14px;
-  }
-  .setup-card .primary-btn{
-    width:100%; margin-top:12px; padding:13px; border:none; border-radius:8px;
-    background:var(--red); color:#fff; font-family:'Bebas Neue',sans-serif; font-size:18px;
-    letter-spacing:1px; cursor:pointer;
-  }
-  .setup-card .skip-btn{
-    width:100%; margin-top:8px; padding:10px; border:1px solid rgba(255,255,255,0.15); border-radius:8px;
-    background:none; color:var(--text-secondary); font-size:13px; cursor:pointer;
   }
 
   /* ===== SECTION HEADINGS ===== */
@@ -301,7 +273,6 @@
   </div>
   <div class="header-right">
     <span id="lastUpdated">Not loaded</span>
-    <button id="settingsBtn" title="API key settings">⚙</button>
     <button id="refreshBtn" title="Refresh data">↻</button>
   </div>
 </header>
@@ -365,32 +336,6 @@
   </section>
 </main>
 
-<!-- SETUP SCREEN -->
-<div id="setupScreen">
-  <div class="setup-card">
-    <span class="trophy">🏆</span>
-    <h1>FIFA WC 2026 Tracker</h1>
-    <p>
-      To load live standings, matches and bracket data, you'll need a free API key from
-      <a href="https://www.api-football.com/" target="_blank" rel="noopener">api-football.com</a>.
-    </p>
-    <p style="font-size:12px;">
-      1. Go to api-football.com and create a free account.<br>
-      2. Copy your API key from the dashboard.<br>
-      3. Paste it below.
-    </p>
-    <input type="text" id="apiKeyInput" placeholder="Paste your API key here">
-    <p style="font-size:11px; margin-top:14px;">
-      Browser CORS issue? If direct calls fail, deploy a tiny free
-      <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Worker</a>
-      proxy and enter its URL below instead.
-    </p>
-    <input type="text" id="proxyUrlInput" placeholder="(Optional) Proxy URL e.g. https://your-worker.workers.dev">
-    <button class="primary-btn" id="saveKeyBtn">Save &amp; Continue</button>
-    <button class="skip-btn" id="skipKeyBtn">Continue without a key</button>
-  </div>
-</div>
-
 <!-- SIMULATE MODAL -->
 <div class="modal-overlay hidden" id="simModal">
   <div class="modal">
@@ -412,11 +357,10 @@
 
   /* ================= CONFIG ================= */
   const CONFIG = {
-    apiBase: 'https://v3.football.api-sports.io',
-    leagueId: 1,        // FIFA World Cup
-    season: 2026,
-    cacheTTL: 60 * 60 * 1000, // 60 minutes
-    dailyLimit: 100
+    // Public, no-key ESPN endpoints — open CORS, no preflight required.
+    scoreboardUrl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719',
+    standingsUrl: 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings',
+    cacheTTL: 60 * 60 * 1000 // 60 minutes
   };
 
   const ROUND_ORDER = ['Round of 32','Round of 16','Quarter-finals','Semi-finals','Final'];
@@ -449,10 +393,6 @@
 
   /* ================= STORAGE ================= */
   const Storage = {
-    getApiKey(){ return localStorage.getItem('wc2026_api_key') || ''; },
-    setApiKey(k){ localStorage.setItem('wc2026_api_key', k.trim()); },
-    getProxyUrl(){ return localStorage.getItem('wc2026_proxy_url') || ''; },
-    setProxyUrl(u){ localStorage.setItem('wc2026_proxy_url', u.trim()); },
     getCache(key){
       try{
         const raw = localStorage.getItem('wc2026_cache_' + key);
@@ -465,22 +405,6 @@
     },
     isFresh(entry){
       return entry && (Date.now() - entry.timestamp) < CONFIG.cacheTTL;
-    },
-    getRateLimit(){
-      try{
-        const raw = JSON.parse(localStorage.getItem('wc2026_rate_limit') || 'null');
-        const today = new Date().toISOString().slice(0,10);
-        if(!raw || raw.date !== today) return { date: today, count: 0 };
-        return raw;
-      }catch(e){
-        return { date: new Date().toISOString().slice(0,10), count: 0 };
-      }
-    },
-    incrRateLimit(){
-      const rl = Storage.getRateLimit();
-      rl.count += 1;
-      localStorage.setItem('wc2026_rate_limit', JSON.stringify(rl));
-      return rl;
     },
     getSimResult(){
       try{ return JSON.parse(localStorage.getItem('wc2026_sim_result') || 'null'); }
@@ -499,23 +423,10 @@
 
   /* ================= API ================= */
   const Api = {
-    async request(endpoint, params, cacheKey){
+    async request(url, cacheKey){
       const cached = Storage.getCache(cacheKey);
       if(Storage.isFresh(cached)){
         return { data: cached.data, fromCache: true };
-      }
-
-      const rl = Storage.getRateLimit();
-      if(rl.count >= CONFIG.dailyLimit){
-        if(cached) return { data: cached.data, fromCache: true, rateLimited: true };
-        throw new Error('RATE_LIMIT');
-      }
-
-      const proxyUrl = Storage.getProxyUrl();
-      const apiKey = Storage.getApiKey();
-      if(!apiKey && !proxyUrl){
-        if(cached) return { data: cached.data, fromCache: true };
-        throw new Error('NO_KEY');
       }
 
       if(location.protocol === 'file:'){
@@ -525,79 +436,110 @@
         throw err;
       }
 
-      let url, fetchOpts;
-      if(proxyUrl){
-        // Proxy mode: a small server-side proxy injects the API key itself,
-        // so the browser sends a plain GET with no custom headers (no CORS preflight).
-        url = new URL(proxyUrl.replace(/\/$/, '') + endpoint);
-        Object.keys(params || {}).forEach(k => url.searchParams.set(k, params[k]));
-        fetchOpts = {};
-      } else {
-        url = new URL(CONFIG.apiBase + endpoint);
-        Object.keys(params || {}).forEach(k => url.searchParams.set(k, params[k]));
-        fetchOpts = { headers: { 'x-apisports-key': apiKey } };
-      }
-
       let res;
       try{
-        res = await fetch(url.toString(), fetchOpts);
+        res = await fetch(url);
       }catch(e){
-        console.error('Fetch failed:', e, 'url=', url.toString(), 'online=', navigator.onLine);
+        console.error('Fetch failed:', e, 'url=', url, 'online=', navigator.onLine);
         if(cached) return { data: cached.data, fromCache: true };
-
-        // Sanity check: can we reach a different cross-origin host at all?
-        let sanity = 'unknown';
-        try{
-          const sres = await fetch('https://api.github.com/zen');
-          sanity = 'ok (' + sres.status + ')';
-        }catch(e3){
-          sanity = 'also failing: ' + e3.name + ': ' + e3.message;
-        }
-
         const err = new Error('NETWORK');
-        err.detail = `${e.name}: ${e.message} — url=${url.toString()} — sanity-check-to-github=${sanity}`;
+        err.detail = `${e.name}: ${e.message} — url=${url}`;
         throw err;
       }
-
-      Storage.incrRateLimit();
 
       if(!res.ok){
-        if(res.status === 429){
-          if(cached) return { data: cached.data, fromCache: true, rateLimited: true };
-          throw new Error('RATE_LIMIT');
-        }
-        let bodyText = '';
-        try{ bodyText = await res.text(); }catch(e){}
         if(cached) return { data: cached.data, fromCache: true };
         const err = new Error('HTTP_' + res.status);
-        err.detail = bodyText.slice(0, 300);
         throw err;
       }
 
-      const json = await res.json();
-      if(json.errors && (Array.isArray(json.errors) ? json.errors.length : Object.keys(json.errors).length)){
-        if(cached) return { data: cached.data, fromCache: true };
-        const err = new Error('API_ERROR');
-        err.detail = JSON.stringify(json.errors);
-        throw err;
-      }
-
-      const data = json.response;
+      const data = await res.json();
       Storage.setCache(cacheKey, data);
       return { data, fromCache: false };
     },
 
     async getStandings(){
-      const r = await Api.request('/standings', { league: CONFIG.leagueId, season: CONFIG.season }, 'standings');
-      const groups = (r.data && r.data[0] && r.data[0].league && r.data[0].league.standings) || [];
-      return { groups, fromCache: r.fromCache, rateLimited: r.rateLimited };
+      const r = await Api.request(CONFIG.standingsUrl, 'standings');
+      const groups = normalizeStandings(r.data);
+      return { groups, fromCache: r.fromCache };
     },
 
     async getFixtures(){
-      const r = await Api.request('/fixtures', { league: CONFIG.leagueId, season: CONFIG.season }, 'fixtures');
-      return { fixtures: r.data || [], fromCache: r.fromCache, rateLimited: r.rateLimited };
+      const r = await Api.request(CONFIG.scoreboardUrl, 'fixtures');
+      const fixtures = normalizeFixtures(r.data);
+      return { fixtures, fromCache: r.fromCache };
     }
   };
+
+  /* ================= ESPN NORMALIZATION ================= */
+  function statValue(entry, name){
+    const stat = (entry.stats || []).find(s => s.name === name);
+    return stat ? Number(stat.value) : 0;
+  }
+
+  function normalizeStandings(data){
+    const children = (data && data.children) || [];
+    return children.map(group => {
+      const groupName = group.name || group.abbreviation || '';
+      const entries = (group.standings && group.standings.entries) || [];
+      return entries.map(entry => ({
+        rank: statValue(entry, 'rank'),
+        team: { name: entry.team.displayName },
+        all: {
+          played: statValue(entry, 'gamesPlayed'),
+          win: statValue(entry, 'wins'),
+          draw: statValue(entry, 'ties'),
+          lose: statValue(entry, 'losses'),
+          goals: { for: statValue(entry, 'pointsFor'), against: statValue(entry, 'pointsAgainst') }
+        },
+        goalsDiff: statValue(entry, 'pointDifferential'),
+        points: statValue(entry, 'points'),
+        group: groupName
+      })).sort((a,b) => a.rank - b.rank);
+    });
+  }
+
+  const SLUG_TO_ROUND = {
+    'round-of-32': 'Round of 32',
+    'round-of-16': 'Round of 16',
+    'quarterfinals': 'Quarter-finals',
+    'semifinals': 'Semi-finals',
+    'third-place': 'Third Place',
+    'final': 'Final'
+  };
+
+  function normalizeRound(event, comp){
+    const slug = event.season && event.season.slug;
+    if(slug && SLUG_TO_ROUND[slug]) return SLUG_TO_ROUND[slug];
+    const note = (comp && comp.altGameNote) || '';
+    const groupMatch = note.match(/Group [A-L]/i);
+    if(groupMatch) return groupMatch[0];
+    return note || '';
+  }
+
+  function normalizeFixtures(data){
+    const events = (data && data.events) || [];
+    return events.map(event => {
+      const comp = event.competitions && event.competitions[0];
+      const competitors = (comp && comp.competitors) || [];
+      const home = competitors.find(c => c.homeAway === 'home') || {};
+      const away = competitors.find(c => c.homeAway === 'away') || {};
+      const state = event.status && event.status.type && event.status.type.state;
+      const statusShort = state === 'in' ? 'LIVE' : state === 'post' ? 'FT' : 'NS';
+      return {
+        fixture: { date: event.date, status: { short: statusShort } },
+        league: { round: normalizeRound(event, comp) },
+        teams: {
+          home: { name: home.team && home.team.displayName, winner: home.winner },
+          away: { name: away.team && away.team.displayName, winner: away.winner }
+        },
+        goals: {
+          home: home.score !== undefined ? Number(home.score) : null,
+          away: away.score !== undefined ? Number(away.score) : null
+        }
+      };
+    });
+  }
 
   /* ================= BANNERS ================= */
   function showBanner(type, message, opts){
@@ -651,15 +593,6 @@
       handleError(err, !!(standingsResult || fixturesResult));
     }
 
-    const rl = Storage.getRateLimit();
-    if(rl.count >= CONFIG.dailyLimit - 10 && rl.count < CONFIG.dailyLimit){
-      showBanner('warn', `Approaching API rate limit (${rl.count}/${CONFIG.dailyLimit} calls used today).`);
-    } else if(rl.count >= CONFIG.dailyLimit){
-      const tomorrow = new Date(); tomorrow.setUTCHours(24,0,0,0);
-      const hrs = Math.max(1, Math.round((tomorrow - Date.now()) / 3600000));
-      showBanner('warn', `Daily API limit reached (${CONFIG.dailyLimit} calls). Resets in ~${hrs}h. Showing cached data.`);
-    }
-
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
     renderAll();
@@ -667,14 +600,6 @@
 
   function handleError(err, hasData){
     const msg = err.message;
-    if(msg === 'NO_KEY'){
-      showBanner('error', 'No API key set. Add one to load live data.');
-      return;
-    }
-    if(msg === 'RATE_LIMIT'){
-      showBanner('warn', 'Daily API limit reached. Showing cached data where available.');
-      return;
-    }
     if(msg === 'FILE_PROTOCOL'){
       showBanner('error', err.detail);
       return;
@@ -703,7 +628,7 @@
   function renderEmptyStates(){
     const bc = document.getElementById('bracketContainer');
     if(!bc.children.length){
-      bc.innerHTML = '<div class="empty-state">No data yet. Add your API key to get started, or wait for the tournament data to become available.</div>';
+      bc.innerHTML = '<div class="empty-state">No data yet. Tap refresh, or wait for the tournament data to become available.</div>';
     }
   }
 
@@ -1126,37 +1051,6 @@ Give me a ranked list of top 8 contenders to win the World Cup with % probabilit
     });
   });
 
-  /* ================= SETUP SCREEN ================= */
-  function initSetupScreen(){
-    const screen = document.getElementById('setupScreen');
-    if(Storage.getApiKey() || Storage.getProxyUrl()){
-      screen.style.display = 'none';
-    } else {
-      screen.style.display = 'flex';
-    }
-  }
-
-  document.getElementById('settingsBtn').addEventListener('click', () => {
-    document.getElementById('apiKeyInput').value = Storage.getApiKey();
-    document.getElementById('proxyUrlInput').value = Storage.getProxyUrl();
-    document.getElementById('setupScreen').style.display = 'flex';
-  });
-
-  document.getElementById('saveKeyBtn').addEventListener('click', () => {
-    const val = document.getElementById('apiKeyInput').value.trim();
-    const proxyVal = document.getElementById('proxyUrlInput').value.trim();
-    Storage.setProxyUrl(proxyVal);
-    if(!val && !proxyVal) return;
-    Storage.setApiKey(val);
-    document.getElementById('setupScreen').style.display = 'none';
-    loadAll(false);
-  });
-
-  document.getElementById('skipKeyBtn').addEventListener('click', () => {
-    document.getElementById('setupScreen').style.display = 'none';
-    renderAll();
-  });
-
   /* ================= WIRE UP ================= */
   document.getElementById('refreshBtn').addEventListener('click', () => loadAll(true));
   document.getElementById('runSimBtn').addEventListener('click', runSimulation);
@@ -1169,18 +1063,15 @@ Give me a ranked list of top 8 contenders to win the World Cup with % probabilit
   });
 
   /* ================= INIT ================= */
-  initSetupScreen();
-  // Load cached data immediately so UI isn't empty, then refresh from network if a key exists.
+  // Load cached data immediately so UI isn't empty, then refresh from network.
   (function loadCachedFirst(){
     const cs = Storage.getCache('standings');
     const cf = Storage.getCache('fixtures');
-    if(cs) state.standings = cs.data[0] && cs.data[0].league ? cs.data[0].league.standings : cs.data;
-    if(cf) state.fixtures = cf.data;
+    if(cs) state.standings = normalizeStandings(cs.data);
+    if(cf) state.fixtures = normalizeFixtures(cf.data);
   })();
   renderAll();
-  if(Storage.getApiKey() || Storage.getProxyUrl()){
-    loadAll(false);
-  }
+  loadAll(false);
 
 })();
 </script>
