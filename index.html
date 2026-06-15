@@ -143,6 +143,43 @@
   }
   @keyframes pulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.4; transform:scale(1.4); } }
 
+  /* ===== BRACKET: GROUP STAGE PREVIEW ===== */
+  .bracket-preview{margin-bottom:18px;}
+  .bp-header{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}
+  .bp-header .section-title{margin:0;}
+  .bp-progress-label{font-size:11px; color:var(--text-secondary); font-family:'Inter',sans-serif; letter-spacing:1px;}
+  .bp-progress-bar{
+    height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:10px;
+  }
+  .bp-progress-fill{
+    height:100%; background:linear-gradient(90deg, var(--navy), var(--gold)); border-radius:3px;
+    transition:width 0.6s ease;
+  }
+  .bp-note{
+    font-size:12px; color:var(--text-secondary); margin-bottom:14px; line-height:1.5;
+    border-left:2px solid var(--gold); padding-left:8px;
+  }
+  .bp-groups{
+    display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+  }
+  .bp-group-card{
+    flex:0 0 132px; scroll-snap-align:start;
+    background:var(--surface); border:1px solid rgba(255,255,255,0.06); border-top:2px solid var(--gold);
+    border-radius:8px; padding:8px 10px;
+  }
+  .bp-group-title{
+    font-family:'Bebas Neue',sans-serif; font-size:13px; letter-spacing:2px; color:var(--gold); margin-bottom:6px;
+  }
+  .bp-team{
+    display:flex; align-items:center; gap:6px; font-size:12px; padding:2px 0;
+    white-space:nowrap; overflow:hidden;
+  }
+  .bp-team .flag{font-size:14px; flex-shrink:0;}
+  .bp-team .bp-name{flex:1; overflow:hidden; text-overflow:ellipsis;}
+  .bp-team .bp-pts{font-family:'Inter',sans-serif; font-weight:700; color:var(--text-secondary); font-size:11px;}
+  .bp-team.qualify .bp-pts{color:var(--gold);}
+
   /* tooltip */
   .tooltip{
     position:fixed; background:var(--surface2); border:1px solid var(--gold); border-radius:8px;
@@ -646,6 +683,15 @@
     container.innerHTML = '';
 
     const fixtures = state.fixtures || [];
+    const groups = state.standings || [];
+
+    const r32 = fixtures.filter(f => f.league && f.league.round === 'Round of 32');
+    const bracketReady = r32.some(f => f.teams.home && f.teams.home.name && f.teams.away && f.teams.away.name);
+
+    if(!bracketReady && groups.length){
+      container.appendChild(buildGroupStagePreview(groups, fixtures));
+      if(!r32.length) return;
+    }
 
     ROUND_ORDER.forEach(roundName => {
       const col = document.createElement('div');
@@ -665,6 +711,50 @@
       }
       container.appendChild(col);
     });
+  }
+
+  function buildGroupStagePreview(groups, fixtures){
+    const wrap = document.createElement('div');
+    wrap.className = 'bracket-preview';
+
+    const groupFixtures = fixtures.filter(f => /^Group [A-L]$/.test((f.league && f.league.round) || ''));
+    const total = groupFixtures.length;
+    const done = groupFixtures.filter(f => ['FT','AET','PEN'].includes(f.fixture.status.short)).length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+
+    const header = document.createElement('div');
+    header.className = 'bp-header';
+    header.innerHTML = `<h2 class="section-title">GROUP STAGE</h2><span class="bp-progress-label">${done}/${total} PLAYED</span>`;
+    wrap.appendChild(header);
+
+    const bar = document.createElement('div');
+    bar.className = 'bp-progress-bar';
+    bar.innerHTML = `<div class="bp-progress-fill" style="width:${pct}%"></div>`;
+    wrap.appendChild(bar);
+
+    const note = document.createElement('div');
+    note.className = 'bp-note';
+    note.textContent = 'The knockout bracket unlocks once the Round of 32 matchups are confirmed. Here\'s how the groups stand right now:';
+    wrap.appendChild(note);
+
+    const strip = document.createElement('div');
+    strip.className = 'bp-groups';
+    groups.forEach((group, idx) => {
+      const groupName = (group[0] && group[0].group) || `Group ${String.fromCharCode(65 + idx)}`;
+      const card = document.createElement('div');
+      card.className = 'bp-group-card';
+      card.innerHTML = `<div class="bp-group-title">${groupName.replace('Group ', 'GROUP ')}</div>`;
+      group.slice(0, 4).forEach((t, i) => {
+        const row = document.createElement('div');
+        row.className = 'bp-team' + (i < 2 ? ' qualify' : '');
+        row.innerHTML = `<span class="flag">${flagEmoji(t.team.name)}</span><span class="bp-name">${t.team.name}</span><span class="bp-pts">${t.points}</span>`;
+        card.appendChild(row);
+      });
+      strip.appendChild(card);
+    });
+    wrap.appendChild(strip);
+
+    return wrap;
   }
 
   function buildBracketMatch(fx){
