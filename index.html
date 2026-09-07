@@ -106,10 +106,10 @@
     background:#0A0A0A;
     padding:16px 8px;
   }
-  .bracket{display:flex; gap:28px; min-width:1100px;}
-  .bracket-round{display:flex; flex-direction:column; justify-content:space-around; gap:14px; flex:1; min-width:160px;}
+  .bracket{display:flex; gap:14px; min-width:820px;}
+  .bracket-round{display:flex; flex-direction:column; justify-content:space-around; gap:14px; flex:1; min-width:136px; position:relative; padding-top:38px;}
   .bracket-round-title{
-    text-align:center; color:var(--text-secondary); font-size:11px; font-weight:700; margin-bottom:4px;
+    position:absolute; top:0; left:0; right:0; text-align:center; color:var(--text-secondary); font-size:11px; font-weight:700;
     text-transform:uppercase; letter-spacing:2px; font-family:'Inter',sans-serif;
   }
   .bracket-match{
@@ -117,10 +117,11 @@
     padding:6px; position:relative;
   }
   .bracket-match::after{
-    content:''; position:absolute; right:-28px; top:50%; width:28px; height:1px;
+    content:''; position:absolute; right:-14px; top:50%; width:14px; height:1px;
     background:rgba(255,255,255,0.12);
   }
   .bracket-round:last-child .bracket-match::after{display:none;}
+  [hidden]{display:none!important;}
   .bracket-team{
     display:flex; align-items:center; gap:6px; padding:4px 6px; border-radius:6px; font-size:14px;
     cursor:pointer;
@@ -358,7 +359,7 @@
   <button class="tab-btn" data-tab="groups">GROUPS</button>
   <button class="tab-btn" data-tab="matches">MATCHES</button>
   <button class="tab-btn" data-tab="bracket">BRACKET</button>
-  <button class="tab-btn" data-tab="predict">PREDICT</button>
+  <button class="tab-btn" data-tab="predict" hidden aria-hidden="true">PREDICT</button>
 </nav>
 
 <main>
@@ -397,7 +398,7 @@
   </section>
 
   <!-- PREDICT -->
-  <section class="tab-panel" id="panel-predict">
+  <section class="tab-panel" id="panel-predict" hidden aria-hidden="true">
     <h2 class="section-title">Predict</h2>
     <div class="predict-box">
       <h2>Who Wins From Here?</h2>
@@ -572,9 +573,16 @@
   };
 
   function normalizeRound(event, comp){
-    const slug = event.season && event.season.slug;
-    if(slug && SLUG_TO_ROUND[slug]) return SLUG_TO_ROUND[slug];
+    const slug = (event.season && event.season.slug) || '';
+    if(SLUG_TO_ROUND[slug]) return SLUG_TO_ROUND[slug];
     const note = (comp && comp.altGameNote) || '';
+    const roundText = `${slug} ${note}`.toLowerCase();
+    if(/round[^0-9]*32/.test(roundText)) return 'Round of 32';
+    if(/round[^0-9]*16/.test(roundText)) return 'Round of 16';
+    if(/quarter/.test(roundText)) return 'Quarter-finals';
+    if(/semi/.test(roundText)) return 'Semi-finals';
+    if(/third/.test(roundText)) return 'Third Place';
+    if(/final/.test(roundText)) return 'Final';
     const groupMatch = note.match(/Group [A-L]/i);
     if(groupMatch) return groupMatch[0];
     return note || '';
