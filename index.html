@@ -796,7 +796,7 @@
       const earliest = roundFixtures
         .map(f => f.fixture.date)
         .sort((a,b) => new Date(a) - new Date(b))[0];
-      const value = earliest ? daysUntil(earliest) : 'TBD';
+      const value = earliest ? daysUntil(earliest) : 0;
       const card = document.createElement('div');
       card.className = 'countdown-card';
       card.innerHTML = `<div class="cd-value">${value}</div><div class="cd-label">${c.label}${typeof value === 'number' ? ' (DAYS)' : ''}</div>`;
@@ -888,6 +888,19 @@
       if(!r32.length) return;
     }
 
+    const displayFixtures = [...fixtures];
+    const quarterFinals = fixtures.filter(f => f.league && f.league.round === 'Quarter-finals');
+    const semiFinals = fixtures.filter(f => f.league && f.league.round === 'Semi-finals');
+    if(!semiFinals.length && quarterFinals.length === 4){
+      const winner = fixture => fixture.teams.home.winner ? fixture.teams.home : fixture.teams.away;
+      [[0,1],[2,3]].forEach(pair => displayFixtures.push({
+        fixture:{date:null,status:{short:'NS'}},
+        league:{round:'Semi-finals'},
+        teams:{home:winner(quarterFinals[pair[0]]),away:winner(quarterFinals[pair[1]])},
+        goals:{home:0,away:0}, scorers:[]
+      }));
+    }
+
     ROUND_ORDER.forEach(roundName => {
       const col = document.createElement('div');
       col.className = 'bracket-round';
@@ -897,7 +910,7 @@
       title.textContent = roundName;
       col.appendChild(title);
 
-      const roundFixtures = fixtures.filter(f => f.league && f.league.round === roundName);
+      const roundFixtures = displayFixtures.filter(f => f.league && f.league.round === roundName);
       const count = ROUND_COUNTS[roundName];
 
       for(let i = 0; i < count; i++){
@@ -977,7 +990,14 @@
 
     if(!team){
       row.classList.add('tbd');
-      row.textContent = 'TBD';
+      const name = document.createElement('span');
+      name.className = 'bracket-name';
+      name.textContent = 'TBD';
+      row.appendChild(name);
+      const sc = document.createElement('span');
+      sc.className = 'bscore';
+      sc.textContent = '0';
+      row.appendChild(sc);
       return row;
     }
 
@@ -1001,7 +1021,7 @@
       row.classList.add('eliminated');
     }
 
-    if(isDone && score !== null && score !== undefined){
+    if(score !== null && score !== undefined){
       const sc = document.createElement('span');
       sc.className = 'bscore';
       sc.textContent = score;
