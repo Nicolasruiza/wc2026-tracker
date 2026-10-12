@@ -420,7 +420,10 @@
   /* ================= CONFIG ================= */
   const CONFIG = {
     // Public, no-key ESPN endpoints — open CORS, no preflight required.
-    scoreboardUrl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719',
+    // ESPN accepts a season/year filter for this endpoint, but rejects date ranges
+    // (for example, dates=20260611-20260719) with HTTP 400.  Set a large enough
+    // limit to retain all 104 scheduled matches, including the final rounds.
+    scoreboardUrl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=2026&limit=500',
     standingsUrl: 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings',
     newsUrl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/news',
     cacheTTL: 60 * 60 * 1000 // 60 minutes
